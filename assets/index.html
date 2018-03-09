@@ -63,7 +63,7 @@
 
       .left-panel {
         background-color: #cadeeb;
-        position: absolute;
+        position: fixed;
         top: 0;
         left: 0;
         bottom: 0;
@@ -72,6 +72,77 @@
 
       .right-panel {
         padding: 0 0 0 240px;
+      }
+
+      /* Customize the label (the container) */
+      .cb-container {
+        display: inline-block;
+        position: relative;
+        margin-bottom: 14px;
+        right: 16px;
+        cursor: pointer;
+        font-size: 22px;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      /* Hide the browser's default checkbox */
+      .cb-container input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      /* Create a custom checkbox */
+      .checkmark {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 16px;
+        width: 16px;
+        border-radius: 2px;
+        background-color: #eee;
+      }
+
+      /* On mouse-over, add a grey background color */
+      .cb-container:hover input ~ .checkmark {
+        background-color: #ccc;
+      }
+
+      /* When the checkbox is checked, add a blue background */
+      .cb-container input:checked ~ .checkmark {
+        background-color: #2196F3;
+      }
+
+      /* Create the checkmark/indicator (hidden when not checked) */
+      .cb-container .checkmark:after {
+        content: "";
+        position: absolute;
+        display: none;
+      }
+
+      /* Show the checkmark when checked */
+      .cb-container input:checked ~ .checkmark:after {
+        display: block;
+      }
+
+      /* Style the checkmark/indicator */
+      .cb-container .checkmark:after {
+        left: 4px;
+        top: 1px;
+        width: 5px;
+        height: 8px;
+        border: solid white;
+        border-width: 0 3px 3px 0;
+        -webkit-transform: rotate(45deg);
+        -ms-transform: rotate(45deg);
+        transform: rotate(45deg);
+      }
+
+      li.has-cb {
+        list-style: none;
       }
     </style>
   </head>

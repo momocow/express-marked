@@ -2,6 +2,13 @@
 const MARKDOWN_EXTNAME = [
   '.md'
 ]
+const UI_CHECKBOX = function (checked) {
+  return `
+    <label class="cb-container">
+      <input type="checkbox" ${checked ? 'checked' : ''} onclick="return false;">
+      <span class="checkmark"></span>
+    </label>`
+}
 
 const uuidv4 = require('uuid/v4')
 const uuidv5 = require('uuid/v5')
@@ -99,9 +106,9 @@ async function refreshList (targetDir, onError) {
 
   const ROOM_ID = uuidv5(targetDir, EXMD_UUID)
   let files = await getFiles(targetDir).catch(function (err) {
-    if (typeof onError === 'function') {
-      onError(err)
-    }
+    debugIO('Failed to refresh with the requested path, "%s"', targetDir)
+    debugIO(err)
+    if (typeof onError === 'function') onError(err)
     return []
   })
 
@@ -122,14 +129,49 @@ async function refreshList (targetDir, onError) {
   return files
 }
 
-async function refreshFile (targetMdFile, onError) {
+async function refreshFile (targetMdFile) {
   debugIO('Refreshing file at "%s"', targetMdFile)
-  if (!MARKDOWN_EXTNAME.includes(path.extname(targetMdFile))) return
 
-  const fileId = uuidv5(path.relative(process.cwd(), path.resolve(targetMdFile)), EXMD_UUID)
+  const relPath = path.relative(process.cwd(), path.resolve(targetMdFile))
+  const fileId = uuidv5(relPath, EXMD_UUID)
   let content = await readFile(targetMdFile, { encoding: 'utf8' })
 
-  io.in(fileId).emit('file', { fid: fileId }, await marked(content, { gfm: true }))
+  io.in(fileId).emit(
+    'file',
+    { fid: fileId, path: relPath },
+    (await marked(content, { gfm: true }))
+      .replace(/\[\]/g, UI_CHECKBOX(false))
+      .replace(/\[x\]/g, UI_CHECKBOX(true))
+  )
+}
+
+function leaveFileRoom (sock) {
+  debugIO('Leaving File Room "%s" (%s)', sockState[sock.id].file, fid2path[sockState[sock.id].file])
+  io.in(sockState[sock.id].file).emit('file')
+  sock.leave(sockState[sock.id].file)
+  sockState[sock.id].file = undefined
+}
+
+function joinFileRoom (sock, filePath) {
+  debugIO('Joining File Room "%s" (%s)', filePath, fid2path[sockState[sock.id].file])
+  if (!MARKDOWN_EXTNAME.includes(path.extname(filePath))) {
+    debugIO('The specified path does not match with any valid file extensions.')
+    return
+  }
+
+  const FILE_ID = uuidv5(path.relative(process.cwd(), filePath), EXMD_UUID)
+
+  debugIO('Joining File Room "%s" (%s)', FILE_ID, filePath)
+  sock.join(FILE_ID, function (err) {
+    if (err) {
+      debugIO('Failed to join File Room "%s" (%s)', FILE_ID, filePath)
+      debugIO(err)
+      return
+    }
+
+    sockState[sock.id].file = FILE_ID
+    refreshFile(filePath)
+  })
 }
 
 debug('Options: %o', program.opts())
@@ -224,11 +266,6 @@ const server = app.listen(program.port, program.host, function () {
 
 const io = require('socket.io')(server)
 io.on('connection', function (sock) {
-  const onRefreshError = function (requestedPath) {
-    debugIO('Failed to refresh with the requested path, "%s"', requestedPath)
-    sock.emit('exception')
-  }
-
   sockState[sock.id] = { }
 
   sock.on('join', async function (target) {
@@ -245,18 +282,31 @@ io.on('connection', function (sock) {
         return '*' + ext
       })
     }).on('ready', function () {
+      debug('Sane: READY event')
       debug('Sane: Ready to watch files under "%s"', requestedPath)
-    }).on('add', function () {
+    }).on('add', async function () {
       debug('Sane: ADD event')
-      refreshList(requestedPath, function () {
-        onRefreshError(requestedPath)
+
+      let files = await refreshList(requestedPath, function () {
+        sock.emit('exception', 'Cannot refresh the file list under the current directory.')
       })
+
+      if (files.length > 0 && !sockState[sock.id].file) {
+        joinFileRoom(sock, path.resolve(requestedPath, files[0].name))
+      }
     }).on('change', function (file) {
       debug('Sane: CHANGE event')
-      const absFilePath = path.resolve(requestedPath, file)
-      refreshFile(absFilePath, function () {
-        onRefreshError(absFilePath)
+
+      refreshFile(path.resolve(requestedPath, file))
+    }).on('delete', async function (file) {
+      debug('Sane: DELETE event')
+
+      await refreshList(requestedPath, function () {
+        sock.emit('exception', 'Cannot refresh the file list under the current directory.')
       })
+
+      const deletedFileId = uuidv5(path.relative(process.cwd(), path.resolve(requestedPath, file)), EXMD_UUID)
+      if (sockState[sock.id].file === deletedFileId) leaveFileRoom(sock)
     })
 
     debugIO('Joining Directory Room "%s" (%s)', ROOM_ID, requestedPath)
@@ -271,27 +321,11 @@ io.on('connection', function (sock) {
       sockState[sock.id].dir = ROOM_ID
 
       let files = await refreshList(requestedPath, function () {
-        onRefreshError(requestedPath)
+        sock.emit('exception', 'Cannot refresh the file list under the current directory.')
       })
 
       if (files.length > 0) {
-        let absFilePath = isFileTarget ? originalAbs : path.resolve(requestedPath, files[0].name)
-
-        const FILE_ID = uuidv5(path.relative(process.cwd(), absFilePath), EXMD_UUID)
-        debugIO('Joining File Room "%s" (%s)', FILE_ID, absFilePath)
-        sock.join(FILE_ID, function (err) {
-          if (err) {
-            debugIO('Failed to join File Room "%s" (%s)', FILE_ID, absFilePath)
-            debugIO(err)
-            return
-          }
-
-          sockState[sock.id].file = FILE_ID
-
-          refreshFile(absFilePath, function () {
-            onRefreshError(absFilePath)
-          })
-        })
+        joinFileRoom(sock, isFileTarget ? originalAbs : path.resolve(requestedPath, files[0].name))
       }
     })
   })
@@ -308,9 +342,7 @@ io.on('connection', function (sock) {
         }
 
         sockState[sock.id].file = fid
-        refreshFile(fid2path[fid], function () {
-          onRefreshError(fid2path[fid])
-        })
+        refreshFile(fid2path[fid])
       })
     }
 
