@@ -1,0 +1,89 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>{{title}}</title>
+    <meta charset="utf8">
+    <script src="socket.io.slim.js"></script>
+    <link href="https://fonts.googleapis.com/css?family=Coiny" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Inconsolata" rel="stylesheet">
+    <link href="github-markdown.css" rel="stylesheet">
+    <style>
+      .filelist li {
+        list-style: none;
+        cursor: pointer;
+        border-radius: 24px 0 0 24px;
+      }
+
+      .filelist li:hover {
+        color: #ffffff99;
+        background-color: #74b6da;
+      }
+
+      .filelist li.active {
+        color: #ffffff99;
+        background-color: #51b979;
+      }
+
+      .filename {
+        padding: 15px 40px 15px 28px;
+        font-family: 'Inconsolata', monospace;
+        font-size: 18px;
+      }
+
+      .brand {
+        pointer-events: none;
+      }
+      .brand::before {
+        content: "{{title}}";
+        color: #465b8299;
+        display: block;
+        font-size: 28px;
+        font-family: 'Coiny', cursive;
+        padding: 20px;
+      }
+
+      .markdown-body {
+        box-sizing: border-box;
+        min-width: 200px;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 45px;
+      }
+  
+      @media (max-width: 767px) {
+        .markdown-body {
+          padding: 15px;
+        }
+      }
+
+      .live-tag::before {
+        background-color: red;
+        color: white;
+      }
+
+      .left-panel {
+        background-color: #cadeeb;
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 240px;
+      }
+
+      .right-panel {
+        padding: 0 0 0 240px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="left-panel">
+      <div class="brand"></div>
+      <ul class="filelist"></ul>
+    </nav>
+    <div class="right-panel">
+      <div id="content" class="markdown-body">
+      </div>
+    </div>
+  </body>
+  <script src="app.js"></script>
+</html>
